@@ -136,7 +136,7 @@ class World(object):
             spawn_point.location.z += 2.0
             spawn_point.rotation.roll = 0.0
             spawn_point.rotation.pitch = 0.0
-            self.destroy1()
+            self.destroy()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
 
         while self.player is None:
@@ -154,11 +154,6 @@ class World(object):
         self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
         self.camera_manager.transform_index = cam_pos_id
         self.camera_manager.set_sensor(cam_index, notify=False)
-        ####
-        self.camera_manager.sensor_nodes = [None]*2
-        for idx_sensor in range(2):
-            self.camera_manager.set_sensor1(idx_sensor)
-        ####
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
@@ -184,8 +179,6 @@ class World(object):
         self.camera_manager.sensor.destroy()
         self.camera_manager.sensor = None
         self.camera_manager.index = None
-        for sensor_node in self.camera_manager.sensor_nodes:
-            sensor_node.destroy()
 
     def destroy(self):
         """Destroys all actors"""
@@ -195,18 +188,6 @@ class World(object):
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,
             self.player]
-        for actor in actors:
-            if actor is not None:
-                actor.destroy()
-                
-    def destroy1(self):
-        """Destroys all actors"""
-        actors = [
-            self.camera_manager.sensor,
-            self.collision_sensor.sensor,
-            self.lane_invasion_sensor.sensor,
-            self.gnss_sensor.sensor,
-            self.player]+self.camera_manager.sensor_nodes
         for actor in actors:
             if actor is not None:
                 actor.destroy()
@@ -609,12 +590,6 @@ class CameraManager(object):
                 blp.set_attribute('range', '50')
             item.append(blp)
         self.index = None
-        
-        # ####
-        # self.sensor_nodes = [None]*2
-        # for idx_sensor in range(2):
-        #     self.set_sensor1(idx_sensor)
-        # ####
 
     def toggle_camera(self):
         """Activate a camera"""
@@ -643,31 +618,7 @@ class CameraManager(object):
         if notify:
             self.hud.notification(self.sensors[index][2])
         self.index = index
-        
-    ####
-    def set_sensor1(self, idx_sensor, notify=True, force_respawn=False):
-        """Set a sensor"""
-        # index = index % len(self.sensors)
-        needs_respawn = True
-        if needs_respawn:
-            if self.sensor_nodes[idx_sensor] is not None:
-                self.sensor_nodes[idx_sensor].destroy()
-            self.sensor_nodes[idx_sensor] = self._parent.get_world().spawn_actor(
-                self.sensors[idx_sensor][-1],
-                self._camera_transforms[0][0],
-                attach_to=self._parent,
-                attachment_type=self._camera_transforms[0][1])
 
-            # We need to pass the lambda a weak reference to
-            # self to avoid circular reference.
-            weak_self = weakref.ref(self)
-            self.sensor_nodes[idx_sensor].listen(lambda image: CameraManager._parse_image1(weak_self, image,idx_sensor))
-        # if notify:
-        #     self.hud.notification(self.sensors[index][2])
-        # self.index = index
-    ####
-    
-    
     def next_sensor(self):
         """Get the next sensor"""
         self.set_sensor(self.index + 1)
@@ -710,35 +661,6 @@ class CameraManager(object):
         if self.recording:
             image.save_to_disk('_out/%08d' % image.frame)
 
-    ############################
-    @staticmethod
-    def _parse_image1(weak_self, image, idx_sensor):
-        self = weak_self()
-        if not self:
-            return
-        if self.sensors[idx_sensor][0].startswith('sensor.lidar'):
-            points = np.frombuffer(image.raw_data, dtype=np.dtype('f4'))
-            points = np.reshape(points, (int(points.shape[0] / 4), 4))
-            lidar_data = np.array(points[:, :2])
-            lidar_data *= min(self.hud.dim) / 100.0
-            lidar_data += (0.5 * self.hud.dim[0], 0.5 * self.hud.dim[1])
-            lidar_data = np.fabs(lidar_data)  # pylint: disable=assignment-from-no-return
-            lidar_data = lidar_data.astype(np.int32)
-            lidar_data = np.reshape(lidar_data, (-1, 2))
-            lidar_img_size = (self.hud.dim[0], self.hud.dim[1], 3)
-            lidar_img = np.zeros(lidar_img_size)
-            lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
-            self.surface = pygame.surfarray.make_surface(lidar_img)
-        else:
-            image.convert(self.sensors[idx_sensor][1])
-            array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-            array = np.reshape(array, (image.height, image.width, 4))
-            array = array[:, :, :3]
-            array = array[:, :, ::-1]
-            self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-    	
-        image.save_to_disk('_out/{:08}_{:01}'.format(image.frame,idx_sensor))
-        ############################
 # ==============================================================================
 # -- Game Loop ---------------------------------------------------------
 # ==============================================================================
@@ -811,14 +733,11 @@ def game_loop(args):
                 control.manual_gear_shift = False
                 world.player.apply_control(control)
             else:
-                agent.update_information(world)
+                agent.update_information()
 
                 world.tick(clock)
                 world.render(display)
                 pygame.display.flip()
-                # if world.save_count<5:
-                #     world.camera_manager.image.save_to_disk('_out/%08d' % image.frame)
-                #     world.save_count+=1
 
                 # Set new destination when target has been reached
                 if len(agent.get_local_planner().waypoints_queue) < num_min_waypoints and args.loop:
@@ -839,7 +758,7 @@ def game_loop(args):
 
     finally:
         if world is not None:
-            world.destroy1()
+            world.destroy()
 
         pygame.quit()
 
