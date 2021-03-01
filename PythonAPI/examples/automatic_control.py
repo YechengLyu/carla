@@ -155,8 +155,8 @@ class World(object):
         self.camera_manager.transform_index = cam_pos_id
         self.camera_manager.set_sensor(cam_index, notify=False)
         ####
-        self.camera_manager.sensor_nodes = [None]*5
-        for idx_sensor in range(4):
+        self.camera_manager.sensor_nodes = [None]*4
+        for idx_sensor in range(len(self.camera_manager.sensor_nodes)):
             self.camera_manager.set_sensor1(idx_sensor)
         ####
         actor_type = get_actor_display_name(self.player)
