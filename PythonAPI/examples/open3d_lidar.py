@@ -89,7 +89,7 @@ def lidar_callback(point_cloud, point_list):
     point_list.colors = o3d.utility.Vector3dVector(int_color)
 
 
-def semantic_lidar_callback(point_cloud, point_list):
+def semantic_lidar_callback(point_cloud, point_list,frame):
     """Prepares a point cloud with semantic segmentation
     colors ready to be consumed by Open3D"""
     data = np.frombuffer(point_cloud.raw_data, dtype=np.dtype([
@@ -113,6 +113,9 @@ def semantic_lidar_callback(point_cloud, point_list):
 
     point_list.points = o3d.utility.Vector3dVector(points)
     point_list.colors = o3d.utility.Vector3dVector(int_color)
+    
+    if frame % 20==19:
+        point_cloud.save_to_disk('_out/%08d' % int(frame/20))
 
 
 def generate_lidar_bp(arg, world, blueprint_library, delta):
@@ -190,7 +193,7 @@ def main(arg):
 
         point_list = o3d.geometry.PointCloud()
         if arg.semantic:
-            lidar.listen(lambda data: semantic_lidar_callback(data, point_list))
+            lidar.listen(lambda data: semantic_lidar_callback(data, point_list, frame))
         else:
             lidar.listen(lambda data: lidar_callback(data, point_list))
 
@@ -319,6 +322,11 @@ if __name__ == "__main__":
         type=float,
         help='offset in the sensor position in the Z-axis in meters (default: 0.0)')
     args = argparser.parse_args()
+    args.semantic = True
+    # print(args)
+    args.upper_fov = 3
+    args.lower_fov = -25.0
+    args.points_per_second = 2200000
 
     try:
         main(args)
